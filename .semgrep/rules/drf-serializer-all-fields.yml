@@ -1,0 +1,16 @@
+rules:
+  - id: drf-serializer-all-fields
+    languages: [python]
+    severity: WARNING
+    message: >-
+      ModelSerializer exposes every model field with fields = "__all__".
+      On a write endpoint this is mass assignment: clients can set fields
+      like balances or flags. List the writable fields explicitly.
+    metadata:
+      cwe: "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+      owasp: ["A04:2021 - Insecure Design", "API3:2023 - Broken Object Property Level Authorization"]
+    patterns:
+      - pattern-inside: |
+          class $S(..., serializers.ModelSerializer, ...):
+              ...
+      - pattern: fields = "__all__"

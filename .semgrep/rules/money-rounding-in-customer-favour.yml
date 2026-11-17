@@ -1,0 +1,17 @@
+rules:
+  - id: money-rounding-in-customer-favour
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Money is rounded with $MODE. If this is the amount credited to the
+      customer, repeated small operations can create money out of nothing.
+      Credited amounts should normally round down (ROUND_DOWN / ROUND_HALF_EVEN)
+      and a minimum operation size should be enforced.
+    metadata:
+      cwe: "CWE-682: Incorrect Calculation"
+      owasp: "A04:2021 - Insecure Design"
+    patterns:
+      - pattern: $X.quantize($Q, rounding=$MODE)
+      - metavariable-regex:
+          metavariable: $MODE
+          regex: (ROUND_UP|ROUND_CEILING)$

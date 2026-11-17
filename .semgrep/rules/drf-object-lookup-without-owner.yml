@@ -1,0 +1,23 @@
+rules:
+  - id: drf-object-lookup-without-owner
+    languages: [python]
+    severity: WARNING
+    message: >-
+      $MODEL is looked up by $FIELD only, with no filter on request.user.
+      Any logged-in user who guesses the value can read the object
+      (IDOR / BOLA). Scope the query to the owner, e.g.
+      $MODEL.objects.filter($FIELD=..., sender__user=request.user).
+    metadata:
+      cwe: "CWE-639: Authorization Bypass Through User-Controlled Key"
+      owasp: ["A01:2021 - Broken Access Control", "API1:2023 - BOLA"]
+    patterns:
+      - pattern-inside: |
+          class $VIEW(..., APIView, ...):
+              ...
+      - pattern-inside: |
+          def $METHOD(self, request, $KEY, ...):
+              ...
+      - pattern-either:
+          - pattern: $MODEL.objects.get($FIELD=$KEY)
+          - pattern: $MODEL.objects.filter($FIELD=$KEY)
+          - pattern: get_object_or_404($MODEL, $FIELD=$KEY)

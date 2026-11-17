@@ -1,0 +1,4 @@
+.semgrep/
+tests/
+wallet/migrations/
+.venv/

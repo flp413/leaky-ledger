@@ -1,0 +1,21 @@
+rules:
+  - id: balance-check-then-act
+    languages: [python]
+    severity: WARNING
+    message: >-
+      $ACC.$FIELD is checked and then modified outside a database transaction
+      with a row lock. Two concurrent requests can both pass the check
+      (double spend). Wrap it in transaction.atomic() and load the row with
+      select_for_update(), or update with F() expressions.
+    metadata:
+      cwe: "CWE-362: Race Condition"
+      owasp: "A04:2021 - Insecure Design"
+    patterns:
+      - pattern: |
+          if $ACC.$FIELD < $AMOUNT:
+              ...
+          ...
+          $ACC.$FIELD -= $AMOUNT
+      - pattern-not-inside: |
+          with transaction.atomic():
+              ...
