@@ -1,0 +1,6 @@
+services:
+  wallet:
+    build: .
+    # bound to localhost on purpose, this app is vulnerable by design
+    ports:
+      - "127.0.0.1:8000:8000"

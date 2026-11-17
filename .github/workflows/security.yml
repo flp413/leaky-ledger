@@ -1,0 +1,121 @@
+name: security
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  exploit-tests:
+    name: Exploit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -v
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test my own rules
+        run: semgrep --test .semgrep/rules
+      - name: Scan
+        run: >
+          semgrep scan
+          --config p/django --config p/python --config p/secrets
+          --config .semgrep/rules
+          --sarif --output semgrep.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sca:
+    name: Dependencies and image (pip-audit, Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt
+        continue-on-error: true
+      - run: docker build -t leaky-ledger:ci .
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: leaky-ledger:ci
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+  dast:
+    name: DAST (Nuclei + ZAP authenticated API scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the app
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ && break; sleep 2; done
+      - name: Log in as bob
+        run: |
+          TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"bob","password":"bob-pass-1"}' | jq -r .token)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+      - name: Nuclei with my own templates
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host \
+            -v "$PWD/.nuclei:/templates:ro" -v "$PWD/zap:/out" \
+            projectdiscovery/nuclei:latest \
+            -t /templates -u http://127.0.0.1:8000 -duc -o /out/nuclei.txt
+      - name: ZAP API scan with the OpenAPI schema
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" \
+            -e ZAP_AUTH_HEADER=Authorization \
+            -e ZAP_AUTH_HEADER_VALUE="Bearer $TOKEN" \
+            ghcr.io/zaproxy/zaproxy:stable zap-api-scan.py \
+            -t http://127.0.0.1:8000/api/schema/ -f openapi \
+            -r zap-report.html -J zap-report.json -I
+      - name: ZAP active scan on the HTML receipt page
+        run: |
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+            -t "http://127.0.0.1:8000/receipt/1?name=test" \
+            -r zap-receipt.html -I
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-reports
+          path: zap/
