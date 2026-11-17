@@ -64,7 +64,7 @@ jobs:
       - run: pip-audit -r requirements.txt
         continue-on-error: true
       - run: docker build -t leaky-ledger:ci .
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: leaky-ledger:ci
           format: sarif
